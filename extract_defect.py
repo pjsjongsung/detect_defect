@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from dipy.align import (affine_registration, translation,
                         rigid, affine, register_series, rigid_scaling)
 
-from scipy.ndimage import affine_transform
+from scipy.ndimage import affine_transform, label
 
 
 # function for affine registration
@@ -69,6 +69,8 @@ model = np.nan_to_num(model)
 # python extract_defect.py -s 24 -e 84 -b 0.5 -d input_dir output_dir
 # -o selects the output directory, -s the starting slab, -e the last slab and -b a threshold used in the method
 # -d will add an option to use thickness image when binarizing
+# -f will add an option to include foveal region when binarizing
+# --background will add an option to use both fovea and background region when binarizing
 # lower threshold will increase predicted regions
 # if csv is not provided input_dir_path should have sub directories inside
 # named 'subject number'_'scan number'_'which eye' (e.g. 1022_1_OS)
@@ -98,6 +100,8 @@ parser.add_argument('-b', '--bin_th',
                     default=0.5)
 parser.add_argument('-d', '--depth_th',
                     action='store_true')
+parser.add_argument('-f', '--fovea', action='store_true')
+parser.add_argument('--background', action='store_true')
 
 
 args = parser.parse_args()
@@ -108,6 +112,14 @@ slab_start = int(args.slab_start)//4
 slab_end = int(args.slab_end)//4+1
 bin_th = float(args.bin_th)
 depth_th = args.depth_th
+fovea_flag = args.fovea
+background_flag = args.background
+
+if depth_th and background_flag:
+    raise Exception("depth_th and background cannot be used together!")
+
+if background_flag and fovea_flag:
+    raise Exception("background and fovea cannot be used together!")
 
 if args.output_dir_path is None:
     output_dir = csv_path
@@ -184,7 +196,10 @@ for sub_path, sub_dir in zip(subj_paths, subj_list):
     th_model = np.where(np.all([model_slice < ths[1], model_slice>ths[0]], axis=0), 1, 0)
     if depth_th == False:
         ths = threshold_multiotsu(image_slice)
-        th_image = np.where(np.all([image_slice < ths[1], image_slice>ths[0]], axis=0), 1, 0)    
+        if background_flag:
+            th_image = np.where(image < ths[1], 1, 0)
+        else:
+            th_image = np.where(np.all([image_slice < ths[1], image_slice>ths[0]], axis=0), 1, 0)
     else:
         thickness_map = cv.imread(os.path.join(sub_path, sub_dir+'_Thickness.jpg'), 0)[:image.shape[0], :image.shape[1]] / 8
         th_image = np.zeros(th_model.shape)
@@ -192,6 +207,16 @@ for sub_path, sub_dir in zip(subj_paths, subj_list):
             th_image[..., i] = np.where(thickness_map <= (i+slab_start), 1, 0)
         if sub_dir.endswith('OD'):
             th_image = np.flip(th_image, axis=1)
+    if fovea_flag:
+        shape = th_image.shape
+        for i in range(2, shape[2]):
+            labeled_array, num_features = label(th_image[:, :, i] == 0)
+            u = np.unique(labeled_array[shape[0]//2-10:shape[0]//2+10, shape[1]//2-10:shape[1]//2+10])
+            for l in u:
+                if l != 0:
+                    th_image[..., i] = np.where(labeled_array == l, 1, th_image[..., i])
+
+
 
 
     # Registration step
