@@ -155,7 +155,7 @@ else:
 
 
 # metric to be used in registration
-metric = CCMetric(3, radius=3)
+metric = CCMetric(3, radius=1)
 
 # Iterate over all sub directories    
 for sub_path, sub_dir in zip(subj_paths, subj_list):
@@ -197,7 +197,7 @@ for sub_path, sub_dir in zip(subj_paths, subj_list):
     if depth_th == False:
         ths = threshold_multiotsu(image_slice)
         if background_flag:
-            th_image = np.where(image < ths[1], 1, 0)
+            th_image = np.where(image_slice < ths[1], 1, 0)
         else:
             th_image = np.where(np.all([image_slice < ths[1], image_slice>ths[0]], axis=0), 1, 0)
     else:
@@ -208,8 +208,8 @@ for sub_path, sub_dir in zip(subj_paths, subj_list):
         if sub_dir.endswith('OD'):
             th_image = np.flip(th_image, axis=1)
     if fovea_flag:
-        shape = th_image.shape
-        for i in range(2, shape[2]):
+        th_image.shape
+        for i in range(2, th_image.shape[2]):
             labeled_array, num_features = label(th_image[:, :, i] == 0)
             u = np.unique(labeled_array[shape[0]//2-10:shape[0]//2+10, shape[1]//2-10:shape[1]//2+10])
             for l in u:
